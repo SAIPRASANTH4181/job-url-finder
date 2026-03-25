@@ -16,3 +16,8 @@ Thumbs.db
 # Build
 dist/
 build/
+*.js.map
+
+# Auth tokens (sensitive!)
+auth.json
+.job-url-finder/
