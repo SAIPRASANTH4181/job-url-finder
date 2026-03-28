@@ -16,10 +16,13 @@
   "license": "ISC",
   "description": "Job URL finder with ChatGPT OAuth authentication",
   "dependencies": {
-    "open": "^11.0.0"
+    "dotenv": "^17.3.1",
+    "open": "^11.0.0",
+    "puppeteer-core": "^24.40.0"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "@types/puppeteer-core": "^5.4.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   }

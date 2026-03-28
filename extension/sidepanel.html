@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browser Agent</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">A</div>
+    <h1>Browser Agent</h1>
+  </div>
+
+  <!-- Auth -->
+  <div class="auth-section">
+    <div class="auth-status" id="auth-status">Checking...</div>
+    <button class="auth-btn login" id="auth-btn">Login</button>
+  </div>
+
+  <!-- Task Input -->
+  <div class="task-section">
+    <textarea
+      class="task-input"
+      id="task-input"
+      placeholder="Describe what you want the agent to do...&#10;&#10;e.g., Go to google.com and search for 'Stripe careers Senior SWE'"
+    ></textarea>
+    <div class="task-controls">
+      <button class="btn btn-start" id="start-btn" disabled>Start</button>
+      <button class="btn btn-stop" id="stop-btn" disabled>Stop</button>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="status-bar">
+    <div class="status-dot" id="status-dot"></div>
+    <div class="status-text" id="status-text">Idle</div>
+  </div>
+
+  <!-- Result -->
+  <div class="result-banner" id="result-banner">
+    <div class="label">Result</div>
+    <div class="value" id="result-value"></div>
+  </div>
+
+  <!-- Screenshot -->
+  <div class="screenshot-section">
+    <div class="screenshot-label">Live View</div>
+    <img id="screenshot-img" alt="Page screenshot">
+  </div>
+
+  <!-- Log -->
+  <div class="log-section">
+    <h3>Action Log</h3>
+    <div id="log-container"></div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

@@ -64,12 +64,25 @@ export interface CallbackResult {
  * Start a local HTTP server to receive the OAuth callback
  * Returns a promise that resolves with the authorization code
  */
-export function startCallbackServer(expectedState: string): Promise<CallbackResult> {
+export interface ServerConfig {
+  port?: number;
+  host?: string;
+  path?: string;
+}
+
+export function startCallbackServer(
+  expectedState: string,
+  config?: ServerConfig,
+): Promise<CallbackResult> {
+  const port = config?.port ?? OAUTH_CONFIG.callbackPort;
+  const host = config?.host ?? OAUTH_CONFIG.callbackHost;
+  const callbackPath = config?.path ?? "/auth/callback";
+
   return new Promise((resolve, reject) => {
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-      const url = new URL(req.url ?? "/", `http://${OAUTH_CONFIG.callbackHost}:${OAUTH_CONFIG.callbackPort}`);
+      const url = new URL(req.url ?? "/", `http://${host}:${port}`);
 
-      if (url.pathname !== "/auth/callback") {
+      if (url.pathname !== callbackPath) {
         res.writeHead(404, { "Content-Type": "text/plain" });
         res.end("Not found");
         return;
@@ -133,8 +146,8 @@ export function startCallbackServer(expectedState: string): Promise<CallbackResu
       reject(new Error(`Failed to start callback server: ${err.message}`));
     });
 
-    server.listen(OAUTH_CONFIG.callbackPort, OAUTH_CONFIG.callbackHost, () => {
-      console.log(`Callback server listening on ${OAUTH_CONFIG.redirectUri}`);
+    server.listen(port, host, () => {
+      console.log(`Callback server listening on http://${host}:${port}${callbackPath}`);
     });
   });
 }
