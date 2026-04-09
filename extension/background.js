@@ -853,6 +853,18 @@ async function runAgent(task) {
       // 6. Done?
       if (action.action === 'done') {
         sendToPanel({ type: 'STATUS', status: 'done', message: 'Task complete!', result: action.result });
+
+        // Auto-sync URL results to local server if it looks like a job URL
+        if (action.result && /https?:\/\//.test(action.result)) {
+          syncFeedbackToServer({
+            company: '', role: '', fromDomain: 'extension-agent',
+            subjectSnippet: task.substring(0, 100),
+            correctUrl: action.result.match(/https?:\/\/[^\s]+/)?.[0] || action.result,
+          }).then(ok => {
+            if (ok) sendToPanel({ type: 'LOG', step: '', message: 'Result synced to local server' });
+          });
+        }
+
         break;
       }
 
@@ -919,6 +931,38 @@ function sendToPanel(message) {
   chrome.runtime.sendMessage(message).catch(() => {});
 }
 
+// ══════════════════════════════════════════════════════════════════════
+//  Local Server Sync
+// ══════════════════════════════════════════════════════════════════════
+
+const LOCAL_SERVER = 'http://localhost:3000';
+
+async function syncFeedbackToServer(data) {
+  try {
+    const res = await fetch(`${LOCAL_SERVER}/api/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
+async function fetchFeedbackFromServer() {
+  try {
+    const res = await fetch(`${LOCAL_SERVER}/api/feedback`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+async function checkServerStatus() {
+  try {
+    const res = await fetch(`${LOCAL_SERVER}/api/status`);
+    return res.ok;
+  } catch { return false; }
+}
+
 // ── Message handler ──
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -943,6 +987,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'GET_STATUS':
       sendResponse({ isRunning, historyLength: actionHistory.length });
       return false;
+    case 'SYNC_FEEDBACK':
+      syncFeedbackToServer(message.data).then(ok => sendResponse({ ok }));
+      return true;
+    case 'FETCH_FEEDBACK':
+      fetchFeedbackFromServer().then(data => sendResponse({ data }));
+      return true;
+    case 'CHECK_SERVER':
+      checkServerStatus().then(ok => sendResponse({ ok }));
+      return true;
   }
 });
 

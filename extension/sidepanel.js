@@ -15,6 +15,22 @@ const screenshotImg = document.getElementById('screenshot-img');
 const logContainer = document.getElementById('log-container');
 
 let isAuthenticated = false;
+let serverConnected = false;
+
+// ── Server connection ──
+
+const serverDot = document.getElementById('server-dot');
+const serverText = document.getElementById('server-text');
+
+async function checkServer() {
+  const res = await chrome.runtime.sendMessage({ type: 'CHECK_SERVER' });
+  serverConnected = res.ok;
+  serverDot.className = `status-dot ${res.ok ? 'running' : ''}`;
+  serverText.textContent = res.ok ? 'Local server: connected' : 'Local server: offline';
+}
+
+checkServer();
+setInterval(checkServer, 30000);
 
 // ── Auth ──
 

@@ -184,6 +184,49 @@ export function startServer(port: number = 3000): void {
         return;
       }
 
+      if (url.pathname === "/api/stats" && req.method === "GET") {
+        const store = await loadFeedback();
+        const scan = await loadLastScan();
+
+        const totalFeedback = store.entries.length;
+        const uniqueCompanies = new Set(store.entries.map((e) => e.company.toLowerCase())).size;
+
+        // Source breakdown from feedback
+        const sourceCounts: Record<string, number> = {};
+        for (const e of store.entries) {
+          const src = e.source || "unknown";
+          sourceCounts[src] = (sourceCounts[src] || 0) + 1;
+        }
+
+        // Accuracy from last scan: how many jobs had high confidence vs total
+        let lastScanJobs = 0;
+        let highConfidence = 0;
+        let feedbackMatches = 0;
+        if (scan) {
+          lastScanJobs = scan.result.jobs.length;
+          for (const g of scan.result.jobs) {
+            if (g.job.confidence === "high") highConfidence++;
+            const key = `${g.job.company.toLowerCase()}|${g.job.role.toLowerCase()}`;
+            if (store.entries.some((e) => `${e.company.toLowerCase()}|${e.role.toLowerCase()}` === key)) {
+              feedbackMatches++;
+            }
+          }
+        }
+
+        const stats = {
+          totalFeedback,
+          uniqueCompanies,
+          sourceCounts,
+          lastScan: lastScanJobs > 0
+            ? { totalJobs: lastScanJobs, highConfidence, feedbackMatches }
+            : null,
+        };
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(stats));
+        return;
+      }
+
       if (url.pathname === "/api/last-scan" && req.method === "GET") {
         const scan = await loadLastScan();
         if (!scan) {

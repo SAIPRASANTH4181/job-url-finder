@@ -1,6 +1,6 @@
 import { chat } from "./client.js";
 import type { EmailSummary } from "./gmail-client.js";
-import { getRecentFeedback } from "../storage/feedback.js";
+import { getRecentFeedback, loadFeedback } from "../storage/feedback.js";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -213,8 +213,31 @@ export async function analyzeEmails(emails: EmailSummary[]): Promise<ScanResult>
     }
   }
 
-  // ─── Pass 2: Hunt for job URLs ──────────────────────────────
+  // ─── Pre-populate from feedback store ───────────────────────
+  const feedbackStore = await loadFeedback();
+  const feedbackMap = new Map(
+    feedbackStore.entries.map((e) => [
+      `${e.company.toLowerCase()}|${e.role.toLowerCase()}`,
+      e.correctUrl,
+    ]),
+  );
+
   const jobs = Array.from(allJobs.values());
+  let feedbackHits = 0;
+  for (const grouped of jobs) {
+    const key = `${grouped.job.company.toLowerCase()}|${grouped.job.role.toLowerCase()}`;
+    const verified = feedbackMap.get(key);
+    if (verified && !grouped.job.applicationUrl) {
+      grouped.job.applicationUrl = verified;
+      grouped.job.confidence = "high";
+      feedbackHits++;
+    }
+  }
+  if (feedbackHits > 0) {
+    console.log(`  Pre-filled ${feedbackHits} job URL(s) from user feedback.`);
+  }
+
+  // ─── Pass 2: Hunt for job URLs ──────────────────────────────
   const jobsNeedingUrls = jobs.filter((j) => !j.job.applicationUrl);
 
   if (jobsNeedingUrls.length > 0) {

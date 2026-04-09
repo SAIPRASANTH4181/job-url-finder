@@ -166,6 +166,16 @@ body {
 
 /* ── Status bar ── */
 
+.server-bar {
+  padding: 6px 16px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #1a1a1a;
+  color: #888;
+}
+
 .status-bar {
   padding: 8px 16px;
   font-size: 12px;

@@ -425,6 +425,25 @@ export function getDashboardHtml(): string {
     }
     .url-search:hover { text-decoration: underline; color: #fbbf24; }
 
+    /* ─── Export Buttons ─────────────────────────────────────── */
+    .export-btns {
+      display: flex;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .export-btn {
+      padding: 5px 14px;
+      border: 1px solid rgba(96,165,250,0.3);
+      border-radius: 8px;
+      background: rgba(96,165,250,0.08);
+      color: #60a5fa;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .export-btn:hover { background: rgba(96,165,250,0.18); border-color: #60a5fa; }
+
     /* ─── Feedback Input ─────────────────────────────────────── */
     .feedback-row {
       display: flex;
@@ -748,11 +767,40 @@ export function getDashboardHtml(): string {
       </div>
     </div>
 
+    <!-- Feedback Stats -->
+    <div class="feedback-stats" id="feedbackStats">
+      <div class="section-header">
+        <h3 class="section-title">Feedback Loop</h3>
+      </div>
+      <div class="stats-row" style="display:flex;gap:16px;padding:16px;flex-wrap:wrap;">
+        <div class="stat-card" style="flex:1;min-width:120px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.15);border-radius:12px;padding:16px;text-align:center;">
+          <div style="font-size:28px;font-weight:700;color:#4ade80;" id="fbTotal">0</div>
+          <div style="font-size:11px;color:#64748b;margin-top:4px;">Corrections</div>
+        </div>
+        <div class="stat-card" style="flex:1;min-width:120px;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.15);border-radius:12px;padding:16px;text-align:center;">
+          <div style="font-size:28px;font-weight:700;color:#60a5fa;" id="fbCompanies">0</div>
+          <div style="font-size:11px;color:#64748b;margin-top:4px;">Companies</div>
+        </div>
+        <div class="stat-card" style="flex:1;min-width:120px;background:rgba(233,69,96,0.06);border:1px solid rgba(233,69,96,0.15);border-radius:12px;padding:16px;text-align:center;">
+          <div style="font-size:28px;font-weight:700;color:#e94560;" id="fbAccuracy">—</div>
+          <div style="font-size:11px;color:#64748b;margin-top:4px;">High Confidence</div>
+        </div>
+        <div class="stat-card" style="flex:1;min-width:120px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:12px;padding:16px;text-align:center;">
+          <div style="font-size:28px;font-weight:700;color:#f59e0b;" id="fbVerified">—</div>
+          <div style="font-size:11px;color:#64748b;margin-top:4px;">Verified in Last Scan</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Jobs Table -->
     <div class="jobs-section" id="jobsSection">
       <div class="section-header">
         <h3 class="section-title">Discovered Jobs</h3>
         <span class="section-count" id="jobCount">0 jobs</span>
+        <div class="export-btns">
+          <button class="export-btn" onclick="exportCSV()">Export CSV</button>
+          <button class="export-btn" onclick="exportJSON()">Export JSON</button>
+        </div>
       </div>
 
       <!-- Desktop table -->
@@ -878,6 +926,7 @@ export function getDashboardHtml(): string {
 
         const data = await res.json();
         renderResults(data);
+        loadStats();
       } catch (e) {
         document.getElementById('errorText').textContent = e.message;
         errorBanner.classList.add('visible');
@@ -889,7 +938,10 @@ export function getDashboardHtml(): string {
     }
 
     // ─── Render Results ──────────────────────────────────────
+    window._lastScanData = null;
+
     function renderResults(data) {
+      window._lastScanData = data;
       // Stats
       document.getElementById('statTotal').textContent = data.totalEmails;
       document.getElementById('statJobs').textContent = data.jobEmails;
@@ -1028,6 +1080,43 @@ export function getDashboardHtml(): string {
       document.getElementById('skippedChevron').classList.toggle('open');
     }
 
+    // ─── Export ──────────────────────────────────────────────
+    function exportCSV() {
+      var data = window._lastScanData;
+      if (!data || !data.jobs.length) return;
+
+      var rows = [['Company','Role','Job ID','Location','Source','URL','Confidence','Emails']];
+      data.jobs.forEach(function(g) {
+        var j = g.job;
+        rows.push([
+          j.company, j.role, j.jobId || '', j.location || '',
+          j.source || '', j.applicationUrl || j.searchUrl || '',
+          j.confidence || '', g.emails.length.toString()
+        ]);
+      });
+
+      var csv = rows.map(function(r) {
+        return r.map(function(c) { return '"' + (c || '').replace(/"/g, '""') + '"'; }).join(',');
+      }).join('\\n');
+
+      var blob = new Blob([csv], { type: 'text/csv' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'job-scan-' + new Date().toISOString().slice(0,10) + '.csv';
+      a.click();
+    }
+
+    function exportJSON() {
+      var data = window._lastScanData;
+      if (!data || !data.jobs.length) return;
+
+      var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'job-scan-' + new Date().toISOString().slice(0,10) + '.json';
+      a.click();
+    }
+
     // ─── Feedback ────────────────────────────────────────────
     window._feedbackMap = {};
 
@@ -1103,8 +1192,30 @@ export function getDashboardHtml(): string {
       }
     }
 
-    // Load feedback map on init
+    // ─── Stats ───────────────────────────────────────────────
+    async function loadStats() {
+      try {
+        var res = await fetch('/api/stats');
+        if (!res.ok) return;
+        var s = await res.json();
+
+        document.getElementById('fbTotal').textContent = s.totalFeedback;
+        document.getElementById('fbCompanies').textContent = s.uniqueCompanies;
+
+        if (s.lastScan) {
+          var pct = s.lastScan.totalJobs > 0
+            ? Math.round((s.lastScan.highConfidence / s.lastScan.totalJobs) * 100) + '%'
+            : '—';
+          document.getElementById('fbAccuracy').textContent = pct;
+          document.getElementById('fbVerified').textContent =
+            s.lastScan.feedbackMatches + '/' + s.lastScan.totalJobs;
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    // Load feedback map and stats on init
     loadFeedbackMap();
+    loadStats();
   </script>
 
 </body>
