@@ -1,5 +1,6 @@
 import { chat } from "./client.js";
 import type { EmailSummary } from "./gmail-client.js";
+import { getRecentFeedback } from "../storage/feedback.js";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -73,40 +74,27 @@ IMPORTANT: Respond ONLY with valid JSON, no markdown, no explanation. Use this e
   "nonJobEmailIds": ["id3", "id4"]
 }`;
 
-// ─── Pass 2: Find/construct job posting URLs ────────────────────────
+// ─── Pass 2: Find real job posting URLs via web search ─────────────
 
-const URL_HUNT_PROMPT = `You are an expert at finding job posting URLs. Given a list of jobs (company, role, jobId, source platform), your task is to construct the most likely URL where this job is posted.
+function buildUrlHuntPrompt(fewShotExamples: string): string {
+  const examplesSection = fewShotExamples
+    ? `\nEXAMPLES OF CORRECT ANSWERS (verified by user):\n${fewShotExamples}\n\nUse these examples to understand URL patterns for similar platforms.\n`
+    : "";
 
-RULES:
-1. Use your knowledge of how each platform structures job URLs:
+  return `You are an expert at finding real job posting URLs. You have access to web search.
 
-   WORKDAY: The URL pattern is https://{company-slug}.wd{1-5}.myworkdaysite.com/recruiting/
-   - Common slugs: ttipowerequipment, amazon, meta, google, microsoft
-   - Try: https://{company-slug}.wd5.myworkdaysite.com/en-US/recruiting/
-   - Also try the company careers page: https://{company}.com/careers
+For each job below, use web search to find the ACTUAL job posting URL. Do NOT guess or reconstruct URLs from patterns — search and verify.
 
-   GREENHOUSE: https://boards.greenhouse.io/{company-slug}/jobs/{jobId}
-
-   LEVER: https://jobs.lever.co/{company-slug}/{jobId}
-
-   iCIMS: https://careers-{company}.icims.com/jobs/{jobId}/job
-
-   LINKEDIN: https://www.linkedin.com/jobs/view/{jobId}
-   - If no jobId, search: https://www.linkedin.com/jobs/search/?keywords={role}+{company}
-
-   INDEED: https://www.indeed.com/viewjob?jk={jobId}
-   - If no jobId: https://www.indeed.com/jobs?q={role}+{company}
-
-   JOBVITE: https://jobs.jobvite.com/careers/{company-slug}/job/{jobId}
-
-   SUCCESSFACTORS: https://career5.successfactors.eu/career?company={company}&career_job_req_id={jobId}
-
-   AMAZON: https://www.amazon.jobs/en/jobs/{jobId}
-
-2. If you have a jobId AND know the platform, construct the direct URL (confidence: "high")
-3. If you have the platform but no jobId, construct a careers/search URL (confidence: "medium")
-4. If you only have company + role, provide the best guess careers page (confidence: "low")
-5. ALWAYS provide a Google search URL as fallback
+SEARCH STRATEGY:
+1. Search: "{company} {role} job posting" or "{company} careers {role}"
+2. If you have a jobId, include it: "{company} {jobId} job"
+3. If you know the platform (Workday, Greenhouse, etc.), try: "site:{platform-domain} {company} {role}"
+4. Look for the actual job listing page, not a generic careers page
+${examplesSection}
+CONFIDENCE LEVELS:
+- "high": You found the exact job posting URL via search
+- "medium": You found a careers/search page that likely contains the job
+- "low": You could not find the posting, providing best guess
 
 IMPORTANT: Respond ONLY with valid JSON array:
 [
@@ -117,6 +105,7 @@ IMPORTANT: Respond ONLY with valid JSON array:
     "confidence": "high" | "medium" | "low"
   }
 ]`;
+}
 
 // ─── Main Analysis Function ──────────────────────────────────────────
 
@@ -229,7 +218,7 @@ export async function analyzeEmails(emails: EmailSummary[]): Promise<ScanResult>
   const jobsNeedingUrls = jobs.filter((j) => !j.job.applicationUrl);
 
   if (jobsNeedingUrls.length > 0) {
-    console.log(`\n  Pass 2: Hunting URLs for ${jobsNeedingUrls.length} jobs using ChatGPT...\n`);
+    console.log(`\n  Pass 2: Searching web for ${jobsNeedingUrls.length} job URLs using ChatGPT...\n`);
 
     const jobSummaries = jobsNeedingUrls.map((j, idx) => ({
       index: idx,
@@ -240,17 +229,24 @@ export async function analyzeEmails(emails: EmailSummary[]): Promise<ScanResult>
       source: j.job.source,
     }));
 
+    // Build few-shot examples from user feedback
+    const feedback = await getRecentFeedback(10);
+    const fewShotExamples = feedback
+      .map((f) => `- ${f.company} "${f.role}" (${f.source ?? "unknown platform"}) → ${f.correctUrl}`)
+      .join("\n");
+
     try {
       const response = await chat({
         model: "gpt-5.4-mini",
         messages: [
-          { role: "system", content: URL_HUNT_PROMPT },
+          { role: "system", content: buildUrlHuntPrompt(fewShotExamples) },
           {
             role: "user",
             content: `Find job posting URLs for these ${jobSummaries.length} jobs:\n\n${JSON.stringify(jobSummaries, null, 2)}`,
           },
         ],
         temperature: 0.1,
+        tools: [{ type: "web_search_preview" }],
       });
 
       const urlResults = JSON.parse(cleanJsonResponse(response)) as Array<{

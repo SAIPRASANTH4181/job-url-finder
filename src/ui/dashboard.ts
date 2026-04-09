@@ -424,6 +424,73 @@ export function getDashboardHtml(): string {
       text-decoration: none;
     }
     .url-search:hover { text-decoration: underline; color: #fbbf24; }
+
+    /* ─── Feedback Input ─────────────────────────────────────── */
+    .feedback-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .feedback-input {
+      flex: 1;
+      padding: 5px 8px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      background: rgba(0,0,0,0.3);
+      color: #e0e0e0;
+      font-size: 11px;
+      font-family: inherit;
+      outline: none;
+      min-width: 120px;
+    }
+    .feedback-input:focus { border-color: #e94560; }
+    .feedback-input::placeholder { color: #475569; }
+    .feedback-btn {
+      padding: 4px 10px;
+      border: 1px solid rgba(34,197,94,0.3);
+      border-radius: 6px;
+      background: rgba(34,197,94,0.1);
+      color: #4ade80;
+      font-size: 11px;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .feedback-btn:hover { background: rgba(34,197,94,0.2); }
+    .feedback-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .verified-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      background: rgba(34,197,94,0.1);
+      color: #4ade80;
+      border: 1px solid rgba(34,197,94,0.2);
+      margin-top: 4px;
+    }
+    .btn-load-scan {
+      padding: 12px 24px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      background: rgba(255,255,255,0.05);
+      color: #94a3b8;
+      transition: all 0.3s ease;
+    }
+    .btn-load-scan:hover {
+      border-color: rgba(233, 69, 96, 0.3);
+      color: #e0e0e0;
+      background: rgba(255,255,255,0.08);
+    }
+    .btn-load-scan:disabled { opacity: 0.4; cursor: not-allowed; }
     .confidence-badge {
       display: inline-flex;
       align-items: center;
@@ -640,6 +707,7 @@ export function getDashboardHtml(): string {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           Scan Emails
         </button>
+        <button class="btn-load-scan" id="loadLastBtn" onclick="loadLastScan()">Load Last Scan</button>
       </div>
 
       <!-- Progress -->
@@ -845,6 +913,9 @@ export function getDashboardHtml(): string {
         var emails = grouped.emails;
         var num = idx + 1;
 
+        var feedbackKey = (job.company + '|' + job.role).toLowerCase();
+        var hasFeedback = window._feedbackMap && window._feedbackMap[feedbackKey];
+
         var urlHtml = '';
         if (job.applicationUrl) {
           urlHtml = '<a class="url-link" href="' + esc(job.applicationUrl) + '" target="_blank">' + esc(truncate(job.applicationUrl, 40)) + '</a>';
@@ -855,6 +926,24 @@ export function getDashboardHtml(): string {
         if (!job.applicationUrl && !job.searchUrl) {
           urlHtml = '<span class="url-missing">&#x26A0; Not found</span>';
         }
+
+        if (hasFeedback) {
+          urlHtml += '<div class="verified-badge">&#x2705; Verified: ' + esc(truncate(hasFeedback, 40)) + '</div>';
+        }
+
+        // Feedback input
+        var fromDomain = (emails[0] && emails[0].from) ? emails[0].from.split('@').pop() || '' : '';
+        var subjectSnip = (emails[0] && emails[0].subject) ? emails[0].subject.slice(0, 100) : '';
+        urlHtml += '<div class="feedback-row">' +
+          '<input type="text" class="feedback-input" placeholder="Paste correct URL..." ' +
+            'data-company="' + esc(job.company) + '" ' +
+            'data-role="' + esc(job.role) + '" ' +
+            'data-jobid="' + esc(job.jobId || '') + '" ' +
+            'data-source="' + esc(job.source || '') + '" ' +
+            'data-fromdomain="' + esc(fromDomain) + '" ' +
+            'data-subjectsnippet="' + esc(subjectSnip) + '" />' +
+          '<button class="feedback-btn" onclick="submitFeedback(this)">Save</button>' +
+        '</div>';
 
         var conf = job.confidence || 'low';
         var confDot = conf === 'high' ? '&#x1F7E2;' : conf === 'medium' ? '&#x1F7E1;' : '&#x1F534;';
@@ -938,6 +1027,84 @@ export function getDashboardHtml(): string {
       document.getElementById('skippedList').classList.toggle('open');
       document.getElementById('skippedChevron').classList.toggle('open');
     }
+
+    // ─── Feedback ────────────────────────────────────────────
+    window._feedbackMap = {};
+
+    async function loadFeedbackMap() {
+      try {
+        var res = await fetch('/api/feedback');
+        var data = await res.json();
+        (data.entries || []).forEach(function(e) {
+          var key = (e.company + '|' + e.role).toLowerCase();
+          window._feedbackMap[key] = e.correctUrl;
+        });
+      } catch (e) { /* ignore */ }
+    }
+
+    async function submitFeedback(btn) {
+      var input = btn.previousElementSibling;
+      var url = input.value.trim();
+      if (!url) return;
+
+      btn.disabled = true;
+      btn.textContent = '...';
+
+      try {
+        var res = await fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            company: input.dataset.company,
+            role: input.dataset.role,
+            jobId: input.dataset.jobid || null,
+            source: input.dataset.source || null,
+            fromDomain: input.dataset.fromdomain,
+            subjectSnippet: input.dataset.subjectsnippet,
+            correctUrl: url
+          })
+        });
+
+        if (!res.ok) throw new Error('Failed');
+
+        var key = (input.dataset.company + '|' + input.dataset.role).toLowerCase();
+        window._feedbackMap[key] = url;
+
+        var row = btn.closest('.feedback-row');
+        row.innerHTML = '<span class="verified-badge">&#x2705; Saved: ' + esc(truncate(url, 40)) + '</span>';
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'Save';
+        btn.style.borderColor = '#ef4444';
+        btn.style.color = '#ef4444';
+        setTimeout(function() {
+          btn.style.borderColor = '';
+          btn.style.color = '';
+        }, 2000);
+      }
+    }
+
+    async function loadLastScan() {
+      var btn = document.getElementById('loadLastBtn');
+      btn.disabled = true;
+      btn.textContent = 'Loading...';
+
+      try {
+        var res = await fetch('/api/last-scan');
+        if (!res.ok) throw new Error('No previous scan found');
+        var data = await res.json();
+        renderResults(data.result);
+      } catch (e) {
+        document.getElementById('errorText').textContent = e.message;
+        document.getElementById('errorBanner').classList.add('visible');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Load Last Scan';
+      }
+    }
+
+    // Load feedback map on init
+    loadFeedbackMap();
   </script>
 
 </body>

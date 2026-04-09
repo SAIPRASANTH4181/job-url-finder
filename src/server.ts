@@ -5,6 +5,8 @@ import { loadGmailTokens } from "./auth/gmail/token.js";
 import { getAllEmails } from "./api/gmail-client.js";
 import { analyzeEmails } from "./api/job-analyzer.js";
 import { getDashboardHtml } from "./ui/dashboard.js";
+import { saveFeedback, loadFeedback } from "./storage/feedback.js";
+import { saveLastScan, loadLastScan } from "./storage/results.js";
 
 // ─── HTTP Server ────────────────────────────────────────────────────
 
@@ -131,13 +133,66 @@ export function startServer(port: number = 3000): void {
         }
 
         const result = await analyzeEmails(emails);
+        const scanId = await saveLastScan(result);
 
         console.log(
-          `[API] Scan complete: ${result.jobs.length} jobs found from ${result.totalEmails} emails`,
+          `[API] Scan complete: ${result.jobs.length} jobs found from ${result.totalEmails} emails (${scanId})`,
         );
 
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(result));
+        res.end(JSON.stringify({ ...result, scanId }));
+        return;
+      }
+
+      if (url.pathname === "/api/feedback" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) {
+          body += chunk;
+        }
+
+        const data = JSON.parse(body) as {
+          company: string;
+          role: string;
+          jobId?: string | null;
+          source?: string | null;
+          fromDomain: string;
+          subjectSnippet: string;
+          correctUrl: string;
+        };
+
+        const entry = await saveFeedback({
+          company: data.company,
+          role: data.role,
+          jobId: data.jobId ?? null,
+          source: data.source ?? null,
+          fromDomain: data.fromDomain,
+          subjectSnippet: data.subjectSnippet,
+          correctUrl: data.correctUrl,
+        });
+
+        console.log(`[API] Feedback saved: ${entry.company} — ${entry.role} → ${entry.correctUrl}`);
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: true, entry }));
+        return;
+      }
+
+      if (url.pathname === "/api/feedback" && req.method === "GET") {
+        const store = await loadFeedback();
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(store));
+        return;
+      }
+
+      if (url.pathname === "/api/last-scan" && req.method === "GET") {
+        const scan = await loadLastScan();
+        if (!scan) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "No previous scan found" }));
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(scan));
         return;
       }
 

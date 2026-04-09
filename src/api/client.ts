@@ -13,6 +13,7 @@ export interface ChatRequestOptions {
   messages: ChatMessage[];
   temperature?: number;
   max_tokens?: number;
+  tools?: Array<{ type: string; [key: string]: unknown }>;
 }
 
 // ─── Browser-like headers to pass Cloudflare ─────────────────────────
@@ -187,6 +188,7 @@ export async function chat(options: ChatRequestOptions): Promise<string> {
   };
 
   if (max_tokens !== undefined) body["max_output_tokens"] = max_tokens;
+  if (options.tools?.length) body["tools"] = options.tools;
 
   // Use /codex/responses endpoint (tied to ChatGPT subscription limits)
   const response = await authenticatedFetch(API_CONFIG.codexEndpoint, {

@@ -576,13 +576,33 @@ async function cdpNavigate(tabId, url) {
 
 async function cdpEval(tabId, expression) {
   await attachDebugger(tabId);
+
+  // Wrap expression to auto-stringify objects/arrays
+  const wrappedExpr = `
+    (function() {
+      const __result = (function() { return ${expression} })();
+      if (__result && typeof __result === 'object') return JSON.stringify(__result, null, 2);
+      return String(__result);
+    })()
+  `;
+
   const result = await cdp(tabId, 'Runtime.evaluate', {
-    expression,
+    expression: wrappedExpr,
     returnByValue: true,
     awaitPromise: true,
   });
   if (result.exceptionDetails) {
-    return { success: false, error: result.exceptionDetails.text || 'JS evaluation error' };
+    // Fallback: try the raw expression
+    const raw = await cdp(tabId, 'Runtime.evaluate', {
+      expression,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (raw.exceptionDetails) {
+      return { success: false, error: raw.exceptionDetails.text || 'JS evaluation error' };
+    }
+    const val = raw.result.value;
+    return { success: true, value: typeof val === 'object' ? JSON.stringify(val, null, 2) : String(val) };
   }
   return { success: true, value: result.result.value };
 }
