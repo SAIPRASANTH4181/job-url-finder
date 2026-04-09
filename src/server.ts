@@ -1,7 +1,9 @@
 import "dotenv/config";
 import { createServer } from "node:http";
-import { loadTokens } from "./auth/token.js";
-import { loadGmailTokens } from "./auth/gmail/token.js";
+import { loadTokens, clearTokens } from "./auth/token.js";
+import { loadGmailTokens, clearGmailTokens } from "./auth/gmail/token.js";
+import { login } from "./auth/login.js";
+import { gmailLogin } from "./auth/gmail/login.js";
 import { getAllEmails } from "./api/gmail-client.js";
 import { analyzeEmails } from "./api/job-analyzer.js";
 import { getDashboardHtml } from "./ui/dashboard.js";
@@ -61,6 +63,52 @@ export function startServer(port: number = 3000): void {
 
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(status));
+        return;
+      }
+
+      // ─── Auth Routes ──────────────────────────────────────────
+
+      if (url.pathname === "/api/auth/login" && req.method === "POST") {
+        try {
+          console.log("[API] Starting ChatGPT login...");
+          await login();
+          console.log("[API] ChatGPT login successful");
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ success: true }));
+        } catch (err) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: (err as Error).message }));
+        }
+        return;
+      }
+
+      if (url.pathname === "/api/auth/logout" && req.method === "POST") {
+        await clearTokens();
+        console.log("[API] ChatGPT logged out");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: true }));
+        return;
+      }
+
+      if (url.pathname === "/api/auth/gmail-login" && req.method === "POST") {
+        try {
+          console.log("[API] Starting Gmail login...");
+          await gmailLogin();
+          console.log("[API] Gmail login successful");
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ success: true }));
+        } catch (err) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: (err as Error).message }));
+        }
+        return;
+      }
+
+      if (url.pathname === "/api/auth/gmail-logout" && req.method === "POST") {
+        await clearGmailTokens();
+        console.log("[API] Gmail logged out");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: true }));
         return;
       }
 

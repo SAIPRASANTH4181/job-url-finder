@@ -86,6 +86,30 @@ export function getDashboardHtml(): string {
     .auth-dot.yellow { background: #eab308; box-shadow: 0 0 8px rgba(234,179,8,0.5); }
     .auth-dot.loading { background: #64748b; animation: pulse-dot 1.5s infinite; }
     @keyframes pulse-dot { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+    .auth-btn {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.12);
+      transition: all 0.2s;
+      margin-left: 4px;
+    }
+    .auth-btn.login-btn {
+      background: rgba(34,197,94,0.15);
+      color: #4ade80;
+      border-color: rgba(34,197,94,0.3);
+    }
+    .auth-btn.login-btn:hover { background: rgba(34,197,94,0.25); }
+    .auth-btn.logout-btn {
+      background: rgba(239,68,68,0.1);
+      color: #f87171;
+      border-color: rgba(239,68,68,0.2);
+    }
+    .auth-btn.logout-btn:hover { background: rgba(239,68,68,0.2); }
+    .auth-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
     /* ─── Main Container ─────────────────────────────────────── */
     .main {
@@ -693,10 +717,12 @@ export function getDashboardHtml(): string {
       <div class="auth-badge">
         <span id="gmail-dot" class="auth-dot loading"></span>
         <span id="gmail-label">Gmail</span>
+        <button id="gmail-auth-btn" class="auth-btn login-btn" style="display:none" onclick="handleGmailAuth()">Login</button>
       </div>
       <div class="auth-badge">
         <span id="chatgpt-dot" class="auth-dot loading"></span>
         <span id="chatgpt-label">ChatGPT</span>
+        <button id="chatgpt-auth-btn" class="auth-btn login-btn" style="display:none" onclick="handleChatGPTAuth()">Login</button>
       </div>
     </div>
   </nav>
@@ -840,6 +866,19 @@ export function getDashboardHtml(): string {
 
   <script>
     // ─── Load auth status + email count on page load ──────────
+    function updateAuthButton(btnId, isAuthenticated) {
+      var btn = document.getElementById(btnId);
+      btn.style.display = '';
+      if (isAuthenticated) {
+        btn.textContent = 'Logout';
+        btn.className = 'auth-btn logout-btn';
+      } else {
+        btn.textContent = 'Login';
+        btn.className = 'auth-btn login-btn';
+      }
+      btn.disabled = false;
+    }
+
     async function init() {
       try {
         const res = await fetch('/api/status');
@@ -854,6 +893,7 @@ export function getDashboardHtml(): string {
           gDot.className = 'auth-dot red';
           gLabel.textContent = 'Gmail: not connected';
         }
+        updateAuthButton('gmail-auth-btn', data.gmail.authenticated);
 
         const cDot = document.getElementById('chatgpt-dot');
         const cLabel = document.getElementById('chatgpt-label');
@@ -864,6 +904,7 @@ export function getDashboardHtml(): string {
           cDot.className = 'auth-dot red';
           cLabel.textContent = 'ChatGPT: not connected';
         }
+        updateAuthButton('chatgpt-auth-btn', data.chatgpt.authenticated);
       } catch (e) {
         console.error('Status check failed:', e);
       }
@@ -878,6 +919,51 @@ export function getDashboardHtml(): string {
       } catch (e) { /* ignore */ }
     }
     init();
+
+    // ─── Auth handlers ──────────────────────────────────────────
+    async function handleGmailAuth() {
+      var btn = document.getElementById('gmail-auth-btn');
+      var isLogout = btn.textContent === 'Logout';
+
+      btn.disabled = true;
+      btn.textContent = isLogout ? 'Logging out...' : 'Logging in...';
+
+      try {
+        var endpoint = isLogout ? '/api/auth/gmail-logout' : '/api/auth/gmail-login';
+        var res = await fetch(endpoint, { method: 'POST' });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = isLogout ? 'Logout' : 'Login';
+        alert((isLogout ? 'Gmail logout' : 'Gmail login') + ' failed: ' + e.message);
+        return;
+      }
+
+      init(); // Refresh all auth status
+    }
+
+    async function handleChatGPTAuth() {
+      var btn = document.getElementById('chatgpt-auth-btn');
+      var isLogout = btn.textContent === 'Logout';
+
+      btn.disabled = true;
+      btn.textContent = isLogout ? 'Logging out...' : 'Logging in...';
+
+      try {
+        var endpoint = isLogout ? '/api/auth/logout' : '/api/auth/login';
+        var res = await fetch(endpoint, { method: 'POST' });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = isLogout ? 'Logout' : 'Login';
+        alert((isLogout ? 'ChatGPT logout' : 'ChatGPT login') + ' failed: ' + e.message);
+        return;
+      }
+
+      init(); // Refresh all auth status
+    }
 
     // ─── Scan ────────────────────────────────────────────────
     async function startScan() {
