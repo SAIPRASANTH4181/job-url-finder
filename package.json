@@ -11,10 +11,14 @@
     "start": "node dist/index.js",
     "dev": "npx tsx src/index.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "Job URL finder with ChatGPT OAuth authentication",
+  "keywords": ["job-search", "gmail", "chatgpt", "codex", "job-applications", "url-finder"],
+  "author": "Sai Prasanth",
+  "license": "MIT",
+  "description": "Scan Gmail for job application emails and find real posting URLs using ChatGPT Codex with a feedback learning loop",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SAIPRASANTH4181/job-url-finder.git"
+  },
   "dependencies": {
     "dotenv": "^17.3.1",
     "open": "^11.0.0",

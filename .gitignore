@@ -9,6 +9,9 @@ venv/
 .vscode/
 .idea/
 
+# AI tools
+.claude/
+
 # OS
 Thumbs.db
 .DS_Store
@@ -22,3 +25,7 @@ build/
 auth.json
 auth-gmail.json
 .job-url-finder/
+
+# Logs
+*.log
+npm-debug.log*
